@@ -56,7 +56,7 @@ fn tx_executor_test_body<S: StateReader>(
     TransactionVersion::ZERO,
     CairoVersion::Cairo0,
     BouncerWeights {
-        state_diff_size: 0,
+        state_diff_size: 2,
         message_segment_length: 0,
         n_events: 0,
         ..Default::default()
@@ -66,7 +66,7 @@ fn tx_executor_test_body<S: StateReader>(
     TransactionVersion::ONE,
     CairoVersion::Cairo0,
     BouncerWeights {
-        state_diff_size: 2,
+        state_diff_size: 4,
         message_segment_length: 0,
         n_events: 0,
         ..Default::default()

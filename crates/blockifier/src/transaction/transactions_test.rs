@@ -1059,13 +1059,15 @@ fn declare_expected_state_changes_count(version: TransactionVersion) -> StateCha
     // TODO: Make TransactionVersion an enum and use match here.
     if version == TransactionVersion::ZERO {
         StateChangesCount {
-            n_storage_updates: 1, // Sender balance.
+            n_storage_updates: 1,             // Sender balance.
+            n_compiled_class_hash_updates: 1, // Also set compiled class hash.
             ..StateChangesCount::default()
         }
     } else if version == TransactionVersion::ONE {
         StateChangesCount {
-            n_storage_updates: 1,    // Sender balance.
-            n_modified_contracts: 1, // Nonce.
+            n_storage_updates: 1,             // Sender balance.
+            n_modified_contracts: 1,          // Nonce.
+            n_compiled_class_hash_updates: 1, // Also set compiled class hash.
             ..StateChangesCount::default()
         }
     } else if version == TransactionVersion::TWO || version == TransactionVersion::THREE {
