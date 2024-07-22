@@ -108,6 +108,8 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
     fn commit_while_possible(&self) {
         if let Some(mut transaction_committer) = self.scheduler.try_enter_commit_phase() {
             // get the index for the next tx to be committed
+            // 
+            // other worker threads might have signal new tx to be committed, so we loop until we get None
             while let Some(tx_index) = transaction_committer.try_commit() {
                 let commit_succeeded = self.commit_tx(tx_index);
                 if !commit_succeeded {
@@ -203,6 +205,7 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
         let execution_output_ref = execution_output.as_ref().expect(EXECUTION_OUTPUTS_UNWRAP_ERROR);
         let reads = &execution_output_ref.reads;
 
+        // get the state up to the tx_index
         let mut tx_versioned_state = self.state.pin_version(tx_index);
         let reads_valid = tx_versioned_state.validate_reads(reads);
 
@@ -236,6 +239,7 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
         let tx_result =
             &mut execution_output.as_mut().expect(EXECUTION_OUTPUTS_UNWRAP_ERROR).result;
 
+        // only check if we can inlude this tx into the block if the tx executed successfully 
         if let Ok(tx_execution_info) = tx_result.as_mut() {
             let tx_context = self.block_context.to_tx_context(&self.chunk[tx_index]);
             // Add the deleted sequencer balance key to the storage keys.
