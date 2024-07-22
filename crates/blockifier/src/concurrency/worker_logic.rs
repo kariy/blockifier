@@ -107,6 +107,7 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
 
     fn commit_while_possible(&self) {
         if let Some(mut transaction_committer) = self.scheduler.try_enter_commit_phase() {
+            // get the index for the next tx to be committed
             while let Some(tx_index) = transaction_committer.try_commit() {
                 let commit_succeeded = self.commit_tx(tx_index);
                 if !commit_succeeded {
@@ -123,11 +124,16 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
 
     fn execute_tx(&self, tx_index: TxIndex) {
         let mut tx_versioned_state = self.state.pin_version(tx_index);
-        // prepare state for tx execution
+
+        // --- preparing execution context
+
+        // create execution state
         let mut transactional_state =
             TransactionalState::create_transactional(&mut tx_versioned_state);
         let execution_flags =
             ExecutionFlags { charge_fee: true, validate: true, concurrency_mode: true };
+
+        // -- perform execution
 
         // get the tx of the give index
         let tx = &self.chunk[tx_index];

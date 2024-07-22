@@ -34,15 +34,27 @@ impl<'a> TransactionCommitter<'a> {
             "The commit index must be less than the chunk size, since the scheduler is not done."
         );
 
+        // get the tx status for the tx index in commit_index_guard
         let mut status = self.scheduler.lock_tx_status(*self.commit_index_guard);
+
+        // To schedule the tx for the commitment phase, its current status must be TransactionStatus::Executed.
         if *status != TransactionStatus::Executed {
             return None;
         }
+
+        // convert the tx status to ready to be committed
         *status = TransactionStatus::Committed;
+        
+        // increment the next tx index to be committed
         *self.commit_index_guard += 1;
+
+        // mark scheduler as done if the index of next tx to be committed is equal to the chunk size (meaning
+        // we no longer have anymore tx in the chunk)
         if *self.commit_index_guard == self.scheduler.chunk_size {
             self.scheduler.done_marker.store(true, Ordering::Release);
         }
+
+        // return the tx index of the tx whose status we've set to TransactionStatus::Committed
         Some(*self.commit_index_guard - 1)
     }
 
@@ -84,6 +96,15 @@ impl Scheduler {
         }
     }
 
+    /// Validation tasks are given higher priority than execution tasks for several important reasons:
+    ///     
+    /// - Dependency management: Validating completed transactions quickly allows the system to detect conflicts earlier. If a transaction's reads are invalidated, it needs to be re-executed. Prioritizing validation helps identify these cases sooner, potentially reducing wasted work on dependent transactions.
+    /// - Resource efficiency: Validation is generally less computationally expensive than execution. By prioritizing validation, the system can quickly process completed transactions and potentially free up resources or abort invalid transactions earlier.
+    /// - Concurrency optimization: Faster validation allows the system to maintain a higher level of concurrency. By quickly validating executed transactions, it can more rapidly determine which subsequent transactions are safe to execute in parallel.
+    /// - Early conflict detection: In a concurrent execution environment, it's crucial to detect conflicts as soon as possible. Prioritizing validation helps identify conflicting transactions earlier in the process.
+    /// - Commit readiness: Transactions that have been executed and validated are ready for commitment. Prioritizing validation ensures that transactions become commit-ready as quickly as possible, potentially improving overall throughput.
+    /// - Reduced re-execution: By validating transactions quickly, the system can catch invalidated reads earlier. This can reduce the number of transactions that need to be re-executed due to conflicts that occurred while they were waiting for validation.
+    /// 
     pub fn next_task(&self) -> Task {
         if self.done() {
             return Task::Done;
@@ -96,6 +117,7 @@ impl Scheduler {
             return Task::NoTaskAvailable;
         }
 
+        // make sure to finish validation task for earlier tx first before performing any execution task
         if index_to_validate < index_to_execute {
             if let Some(tx_index) = self.next_version_to_validate() {
                 return Task::ValidationTask(tx_index);
@@ -130,6 +152,7 @@ impl Scheduler {
     /// tasks: schedules validation for higher transactions + re-executes the current transaction
     /// (if ready).
     pub fn finish_abort(&self, tx_index: TxIndex) -> Task {
+        // set the tx to ReadyToExecute
         self.set_ready_status(tx_index);
         if self.execution_index.load(Ordering::Acquire) > tx_index && self.try_incarnate(tx_index) {
             Task::ExecutionTask(tx_index)
@@ -149,6 +172,7 @@ impl Scheduler {
     /// or None if the lock is already taken.
     pub fn try_enter_commit_phase(&self) -> Option<TransactionCommitter<'_>> {
         match self.commit_index.try_lock() {
+            // return the `TransactionCommitter` with the index of the transaction to commit
             Ok(guard) => Some(TransactionCommitter::new(self, guard)),
             Err(TryLockError::WouldBlock) => None,
             Err(TryLockError::Poisoned(error)) => {
@@ -165,6 +189,7 @@ impl Scheduler {
         self.done_marker.store(true, Ordering::Release);
     }
 
+    // basically get the tx status for the given tx_index
     fn lock_tx_status(&self, tx_index: TxIndex) -> MutexGuard<'_, TransactionStatus> {
         lock_mutex_in_array(&self.tx_statuses, tx_index)
     }
