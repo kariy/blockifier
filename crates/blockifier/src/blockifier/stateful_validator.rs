@@ -43,8 +43,8 @@ pub type StatefulValidatorResult<T> = Result<T, StatefulValidatorError>;
 
 /// Manages state related transaction validations for pre-execution flows.
 pub struct StatefulValidator<S: StateReader> {
-    tx_executor: TransactionExecutor<S>,
     max_nonce_for_validation_skip: Nonce,
+    tx_executor: TransactionExecutor<CachedState<S>>,
 }
 
 impl<S: StateReader> StatefulValidator<S> {

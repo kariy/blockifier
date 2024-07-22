@@ -123,11 +123,15 @@ impl<'a, S: StateReader> WorkerExecutor<'a, S> {
 
     fn execute_tx(&self, tx_index: TxIndex) {
         let mut tx_versioned_state = self.state.pin_version(tx_index);
-        let tx = &self.chunk[tx_index];
+        // prepare state for tx execution
         let mut transactional_state =
             TransactionalState::create_transactional(&mut tx_versioned_state);
         let execution_flags =
             ExecutionFlags { charge_fee: true, validate: true, concurrency_mode: true };
+
+        // get the tx of the give index
+        let tx = &self.chunk[tx_index];
+        // execute
         let execution_result =
             tx.execute_raw(&mut transactional_state, self.block_context, execution_flags);
 
