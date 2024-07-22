@@ -4,7 +4,7 @@ use starknet_api::core::{ClassHash, CompiledClassHash, ContractAddress, Nonce};
 use starknet_api::state::StorageKey;
 use starknet_types_core::felt::Felt;
 
-use super::cached_state::{ContractClassMapping, StateMaps};
+use super::cached_state::{CachedState, ContractClassMapping, StateMaps};
 use crate::abi::abi_utils::get_fee_token_var_address;
 use crate::abi::sierra_types::next_storage_key;
 use crate::execution::contract_class::ContractClass;
@@ -119,3 +119,18 @@ pub trait UpdatableState: StateReader {
         visited_pcs: &HashMap<ClassHash, HashSet<usize>>,
     );
 }
+
+/// Adapter trait for integrating Katana with the new [`TransactionExecutor`](crate::blockifier::transaction_executor::TransactionExecutor).
+///
+/// This is a minimal trait for allowing Katana to fully manage the state implementation of the [`TransactionExecutor`](crate::blockifier::transaction_executor::TransactionExecutor).
+pub trait DojoStateAdapter: UpdatableState {
+    fn visited_pcs(&self) -> &HashMap<ClassHash, HashSet<usize>> {
+        todo!()
+    }
+
+    fn to_state_diff(&mut self) -> StateResult<StateMaps> {
+        todo!()
+    }
+}
+
+impl<S: StateReader> DojoStateAdapter for CachedState<S> {}

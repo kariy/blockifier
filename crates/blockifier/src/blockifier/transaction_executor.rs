@@ -7,23 +7,22 @@ use std::sync::Arc;
 #[cfg(feature = "concurrency")]
 use std::sync::Mutex;
 
-use itertools::FoldWhile::{Continue, Done};
-use itertools::Itertools;
-use starknet_api::core::ClassHash;
-use thiserror::Error;
-
 use crate::blockifier::config::TransactionExecutorConfig;
 use crate::bouncer::{Bouncer, BouncerWeights};
 #[cfg(feature = "concurrency")]
 use crate::concurrency::worker_logic::WorkerExecutor;
 use crate::context::BlockContext;
-use crate::state::cached_state::{CachedState, CommitmentStateDiff, TransactionalState};
+use crate::state::cached_state::{CommitmentStateDiff, TransactionalState};
 use crate::state::errors::StateError;
-use crate::state::state_api::StateReader;
+use crate::state::state_api::DojoStateAdapter;
 use crate::transaction::errors::TransactionExecutionError;
 use crate::transaction::objects::TransactionExecutionInfo;
 use crate::transaction::transaction_execution::Transaction;
 use crate::transaction::transactions::{ExecutableTransaction, ExecutionFlags};
+use itertools::FoldWhile::{Continue, Done};
+use itertools::Itertools;
+use starknet_api::core::ClassHash;
+use thiserror::Error;
 
 #[cfg(test)]
 #[path = "transaction_executor_test.rs"]
@@ -45,7 +44,7 @@ pub type TransactionExecutorResult<T> = Result<T, TransactionExecutorError>;
 pub type VisitedSegmentsMapping = Vec<(ClassHash, Vec<usize>)>;
 
 // TODO(Gilad): make this hold TransactionContext instead of BlockContext.
-pub struct TransactionExecutor<S: StateReader> {
+pub struct TransactionExecutor<S> {
     pub block_context: BlockContext,
     pub bouncer: Bouncer,
     // Note: this config must not affect the execution result (e.g. state diff and traces).
@@ -56,12 +55,13 @@ pub struct TransactionExecutor<S: StateReader> {
     // block state to the worker executor - operating at the chunk level - and gets it back after
     // committing the chunk. The block state is wrapped with an Option<_> to allow setting it to
     // `None` while it is moved to the worker executor.
-    pub block_state: Option<CachedState<S>>,
+    // pub block_state: Option<CachedState<S>>,
+    pub block_state: Option<S>,
 }
 
-impl<S: StateReader> TransactionExecutor<S> {
+impl<S: DojoStateAdapter> TransactionExecutor<S> {
     pub fn new(
-        block_state: CachedState<S>,
+        block_state: S,
         block_context: BlockContext,
         config: TransactionExecutorConfig,
     ) -> Self {
@@ -151,7 +151,7 @@ impl<S: StateReader> TransactionExecutor<S> {
             .block_state
             .as_ref()
             .expect(BLOCK_STATE_ACCESS_ERR)
-            .visited_pcs
+            .visited_pcs()
             .iter()
             .map(|(class_hash, class_visited_pcs)| -> TransactionExecutorResult<_> {
                 let contract_class = self
@@ -172,7 +172,7 @@ impl<S: StateReader> TransactionExecutor<S> {
     }
 }
 
-impl<S: StateReader + Send + Sync> TransactionExecutor<S> {
+impl<S: DojoStateAdapter + Send> TransactionExecutor<S> {
     /// Executes the given transactions on the state maintained by the executor.
     /// Stops if and when there is no more room in the block, and returns the executed transactions'
     /// results.
