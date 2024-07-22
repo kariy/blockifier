@@ -70,10 +70,13 @@ impl<'a> TransactionCommitter<'a> {
 
 #[derive(Debug, Default)]
 pub struct Scheduler {
+    // The index of the next transaction to execute.
     execution_index: AtomicUsize,
+    // The index of the next transaction to validate.
     validation_index: AtomicUsize,
     // The index of the next transaction to commit.
     commit_index: Mutex<usize>,
+    
     chunk_size: usize,
     // TODO(Avi, 15/05/2024): Consider using RwLock instead of Mutex.
     tx_statuses: Box<[Mutex<TransactionStatus>]>,
@@ -247,6 +250,7 @@ impl Scheduler {
         None
     }
 
+    /// Returns the next transaction index to be executed and increment the next transaction index by 1.
     fn next_version_to_execute(&self) -> Option<TxIndex> {
         let index_to_execute = self.execution_index.load(Ordering::Acquire);
         if index_to_execute >= self.chunk_size {
